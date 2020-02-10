@@ -6,11 +6,16 @@ pragma solidity ^0.4.21;
 
 import "./EIP20Interface.sol";
 import "./ctokenInterface.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts-ethereum-package/blob/v1.9.4/contracts/math/SafeMath.sol";
 
 contract pouch is EIP20Interface {
+    using SafeMath for uint256;
+
     uint256 private constant MAX_UINT256 = 2**256 - 1;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
+    mapping(address => bool) public registeredUser;
+    address public admin;
     /*
     NOTE:
     The following variables are OPTIONAL vanities. One does not have to include them.
@@ -35,7 +40,7 @@ contract pouch is EIP20Interface {
         name = _tokenName; // Set the name for display purposes
         decimals = _decimalUnits; // Amount of decimals for display purposes
         symbol = _tokenSymbol; // Set the symbol for display purposes
-
+        admin = msg.sender;
         daiToken.approve(cDaiAddress, cDaiAllowedAmount);
     }
 
@@ -86,7 +91,22 @@ contract pouch is EIP20Interface {
         return allowed[_owner][_spender];
     }
 
-    function deposit(uint256 value) external {
+    // ** Registration **
+    function registerUser() external {
+        registeredUser[msg.sender] = true;
+    }
+
+    modifier isRegisteredUser() {
+        require(registeredUser[msg.sender] == true);
+        _;
+    }
+
+    modifier adminOnly() {
+        require(msg.sender == admin);
+        _;
+    }
+    // ** Deposit DAI **
+    function deposit(uint256 value) external isRegisteredUser {
         // Check if User's Dai Balance is more or equal to the value sent.
         uint256 userBalance = daiToken.balanceOf(msg.sender);
         require(
@@ -115,7 +135,8 @@ contract pouch is EIP20Interface {
         cDai.mint(value);
     }
 
-    function withdraw(uint256 value) external {
+    // ** Wwithdraw DAI**
+    function withdraw(uint256 value) external isRegisteredUser {
         // Check if User's PCH balance is more or equal to the value sent.
         uint256 pouchBalance = balanceOf(msg.sender);
         require(
@@ -130,6 +151,37 @@ contract pouch is EIP20Interface {
         // Redeem User's DAI from compound and transfer it to user.
         cDai.redeemUnderlying(value);
         daiToken.transfer(msg.sender, value);
+    }
+
+    function spitProfits() external adminOnly {
+        uint256 adjustedTotalSupply = totalSupply.mul(100000000);
+        uint256 ourContractBalance = cDai.balanceOf(address(this));
+        uint256 cDaiExchangeRate = cDai.exchangeRateCurrent();
+        uint256 cDaiExchangeRateDivided = cDaiExchangeRate.div(10000000000);
+
+        uint256 currentPrice = adjustedTotalSupply.div(cDaiExchangeRateDivided);
+        uint256 profit = ourContractBalance.sub(currentPrice);
+        cDai.transfer(msg.sender, profit);
+
+    }
+
+    function myCurrentBalance() external view returns (uint256) {
+        return cDai.balanceOf(address(this));
+    }
+
+    function getExchangeRate() external view returns (uint256) {
+        return cDai.exchangeRateCurrent();
+    }
+
+    function checkProfits() external view returns (uint256) {
+        uint256 adjustedTotalSupply = totalSupply.mul(100000000);
+        uint256 ourContractBalance = cDai.balanceOf(address(this));
+        uint256 cDaiExchangeRate = cDai.exchangeRateCurrent();
+        uint256 cDaiExchangeRateDivided = cDaiExchangeRate.div(10000000000);
+
+        uint256 currentPrice = adjustedTotalSupply.div(cDaiExchangeRateDivided);
+        uint256 profit = ourContractBalance.sub(currentPrice);
+        return profit;
     }
 
 }
