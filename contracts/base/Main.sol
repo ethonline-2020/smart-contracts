@@ -2,11 +2,11 @@
 Implements EIP20 token standard: https://github.com/ethereum/EIPs/blob/master/EIPS/eip-20.md
 .*/
 
-pragma solidity ^0.4.21;
+pragma solidity ^0.5.0;
 
 import "./EIP20Interface.sol";
 import "./ctokenInterface.sol";
-import "https://github.com/OpenZeppelin/openzeppelin-contracts-ethereum-package/blob/v1.9.4/contracts/math/SafeMath.sol";
+import "https://github.com/OpenZeppelin/openzeppelin-contracts-ethereum-package/blob/master/contracts/math/SafeMath.sol";
 
 contract pouch is EIP20Interface {
     using SafeMath for uint256;
@@ -34,9 +34,11 @@ contract pouch is EIP20Interface {
 
     uint256 cDaiAllowedAmount = 35000000000000000000000000000000000000000000000000;
 
-    constructor(string _tokenName, uint8 _decimalUnits, string _tokenSymbol)
-        public
-    {
+    constructor(
+        string memory _tokenName,
+        uint8 _decimalUnits,
+        string memory _tokenSymbol
+    ) public {
         name = _tokenName; // Set the name for display purposes
         decimals = _decimalUnits; // Amount of decimals for display purposes
         symbol = _tokenSymbol; // Set the symbol for display purposes
@@ -134,6 +136,8 @@ contract pouch is EIP20Interface {
 
         cDai.mint(value);
     }
+
+    // Create a function called execute()
 
     // ** Wwithdraw DAI**
     function withdraw(uint256 value) external isRegisteredUser {
