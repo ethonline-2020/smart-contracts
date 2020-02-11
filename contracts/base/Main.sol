@@ -169,11 +169,11 @@ contract pouch is EIP20Interface {
         return cDai.balanceOf(address(this));
     }
 
-    function getExchangeRate() external view returns (uint256) {
+    function getExchangeRate() public view returns (uint256) {
         return cDai.exchangeRateCurrent();
     }
 
-    function checkProfits() external view returns (uint256) {
+    function checkProfits() public view returns (uint256) {
         uint256 adjustedTotalSupply = totalSupply.mul(100000000);
         uint256 ourContractBalance = cDai.balanceOf(address(this));
         uint256 cDaiExchangeRate = cDai.exchangeRateCurrent();
@@ -182,6 +182,32 @@ contract pouch is EIP20Interface {
         uint256 currentPrice = adjustedTotalSupply.div(cDaiExchangeRateDivided);
         uint256 profit = ourContractBalance.sub(currentPrice);
         return profit;
+    }
+
+    uint256 oneDai = 1000000000000000000;
+    uint256 tenDai = 10000000000000000000;
+
+    function _randomReward() internal view returns (uint256) {
+        uint256 randomnumber = uint256(
+            keccak256(abi.encodePacked(now, msg.sender, block.number))
+        ) %
+            5;
+        return randomnumber * oneDai;
+    }
+
+    function transact(address to, uint256 value) external {
+        transfer(to, value);
+        if (value >= tenDai) {
+            uint256 profitInDai = checkProfits().mul(getExchangeRate());
+            uint256 checkProfitInDai = profitInDai.div(oneDai);
+            if (checkProfitInDai >= oneDai) {
+                uint256 myReward = _randomReward();
+                cDai.redeemUnderlying(myReward);
+                daiToken.transfer(msg.sender, myReward);
+
+            }
+
+        }
     }
 
 }
