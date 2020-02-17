@@ -6,54 +6,34 @@ import "./cTokenInterface.sol";
 import "./PTokenInterface.sol";
 
 contract PouchToken is PTokenInterface {
+
+ 
     uint256 public totalSupply;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
-    address public ImplementationAddress;
-    address public admin;
     bytes32 public DOMAIN_SEPARATOR;
-    bytes32 public constant PERMIT_TYPEHASH = keccak256(
-        "Permit(address holder,address spender,uint256 nonce,uint256 expiry,bool isAllowed)"
-    );
-    mapping(address => uint256) public nonces;
-    uint256 private constant MAX_UINT256 = uint256(-1);
-
-    bytes32 public constant DEPOSIT_TYPEHASH = keccak256(
-        "Deposit(address holder,uint256 value)"
-    );
-    bytes32 public constant WITHDRAW_TYPEHASH = keccak256(
-        "Withdraw(address holder,uint256 value)"
-    );
-
-    address daiAddress = 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa;
+    address public admin;
     address cDaiAddress = 0xe7bc397DBd069fC7d0109C0636d06888bb50668c;
-    address pDaiAddress = 0xb5cea18Db04008a4D68444A298DBDD2D0E442E3D;
-
-    TokenInterface daiToken = TokenInterface(daiAddress);
     cTokenInterface cDai = cTokenInterface(cDaiAddress);
-    PTokenInterface pDaiToken = PTokenInterface(pDaiAddress);
+    address daiAddress = 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa;
+    TokenInterface daiToken = TokenInterface(daiAddress);
+   
+    mapping(address => uint256) public nonces;
+    bytes32 public constant PERMIT_TYPEHASH = keccak256("Permit(address holder,address spender,uint256 nonce,uint256 expiry,bool isAllowed)");
+    address public ImplementationAddress;
+    uint256 private constant MAX_UINT256 = uint(-1);
 
     // --- ERC20 Data ---
-    string public constant name = "Pouch Token";
-    string public constant symbol = "PCH";
-    string public constant version = "1";
-    uint8 public constant decimals = 18;
+    string  public constant name     = "Pouch Token";
+    string  public constant symbol   = "PCH";
+    string  public constant version  = "1";
+    uint8   public constant decimals = 18;
 
-    constructor(uint256 _chainId) public {
-        DOMAIN_SEPARATOR = keccak256(
-            abi.encode(
-                keccak256(
-                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                ),
-                keccak256(bytes(name)),
-                keccak256(bytes(version)),
-                _chainId,
-                address(this)
-            )
-        );
 
-        admin = msg.sender;
-    }
+
+
+   
+// ** ERC-20 Standard Functions **
 
     function transfer(address _to, uint256 _value)
         external
@@ -62,7 +42,7 @@ contract PouchToken is PTokenInterface {
         require(balances[msg.sender] >= _value);
         balances[msg.sender] -= _value;
         balances[_to] += _value;
-        emit Transfer(msg.sender, _to, _value);
+        emit Transfer(msg.sender, _to, _value); 
         return true;
     }
 
@@ -77,7 +57,7 @@ contract PouchToken is PTokenInterface {
         if (allowance < MAX_UINT256) {
             allowed[_from][msg.sender] -= _value;
         }
-        emit Transfer(_from, _to, _value);
+        emit Transfer(_from, _to, _value); 
         return true;
     }
 
@@ -90,7 +70,7 @@ contract PouchToken is PTokenInterface {
         returns (bool success)
     {
         allowed[msg.sender][_spender] = _value;
-        emit Approval(msg.sender, _spender, _value);
+        emit Approval(msg.sender, _spender, _value); 
         return true;
     }
 
@@ -101,145 +81,145 @@ contract PouchToken is PTokenInterface {
     {
         return allowed[_owner][_spender];
     }
-
+    
+    
+    
     // --- Approve by signature ---
-    function permitted(
-        address holder,
-        address spender,
-        uint256 nonce,
-        uint256 expiry,
-        bool isAllowed,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) public {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
+    function permitted(address holder, address spender, uint256 nonce, uint256 expiry,
+                    bool isAllowed, uint8 v, bytes32 r, bytes32 s) public
+    {
+        bytes32 digest =
+            keccak256(abi.encodePacked(
                 "\x19\x01",
                 DOMAIN_SEPARATOR,
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        holder,
-                        spender,
-                        nonce,
-                        expiry,
-                        isAllowed
-                    )
-                )
-            )
-        );
+                keccak256(abi.encode(PERMIT_TYPEHASH,
+                                     holder,
+                                     spender,
+                                     nonce,
+                                     expiry,
+                                     isAllowed))
+        ));
 
         require(holder != address(0), "Dai/invalid-address-0");
         require(holder == ecrecover(digest, v, r, s), "Dai/invalid-permit");
         require(expiry == 0 || now <= expiry, "Dai/permit-expired");
         require(nonce == nonces[holder]++, "Dai/invalid-nonce");
-        uint256 wad = isAllowed ? uint256(-1) : 0;
+        uint wad = isAllowed ? uint(-1) : 0;
         allowed[holder][spender] = wad;
         emit Approval(holder, spender, wad);
     }
 
-    // ** Proxy **
+function supplyOf() external view returns (uint256 balance) {
+        return totalSupply;
+    }
 
-    function updateLogic(address _newImplemenationAddress) external {
-        require(msg.sender == admin, "Admin Only");
+
+
+}
+
+
+//  ** Inheritance of Pouch Token to Make Delegate Calls to implementation Contract. **
+
+contract PouchDelegate is PouchToken{
+        
+    constructor(uint256 _chainId) public {
+        DOMAIN_SEPARATOR = keccak256(abi.encode(
+            keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+            keccak256(bytes(name)),
+            keccak256(bytes(version)),
+            _chainId,
+            address(this)
+        ));
+     
+     admin = msg.sender;   
+   }
+
+
+// ** Internal Functions **
+
+modifier adminOnly(){
+    require(msg.sender == admin, 'Restricted Access to Admin Only');
+    _;
+}
+
+
+// ** Update Implementation Address **    
+function updateLogic(address _newImplemenationAddress) external adminOnly {
+        require(msg.sender == admin,'Admin Only');
         ImplementationAddress = _newImplemenationAddress;
     }
 
-    function deposit(
-        address holder,
+
+// ** Delegate Calls **
+    
+    // Internal Delegate Function **
+function _ImplementDelegationCore(address _holder,
+        uint256 _value,
+        bytes32 _r,
+        bytes32 _s,
+        uint8 _v,
+        bytes memory logic) internal returns (bool){
+        (bool status, bytes memory returnedData) = ImplementationAddress.delegatecall(abi.encodeWithSelector(bytes4(keccak256(logic)),_holder, _value, _r, _s, _v));
+        require(status);
+        return abi.decode(returnedData,(bool));
+    }
+
+function deposit(address holder,
         uint256 value,
         bytes32 r,
         bytes32 s,
-        uint8 v
-    ) public returns (bool) {
-        (bool status, bytes memory returnedData) = ImplementationAddress
-            .delegatecall(
-            abi.encodeWithSelector(
-                bytes4(
-                    keccak256("_deposit(address,uint256,bytes32,bytes32,uint8)")
-                ),
-                holder,
-                value,
-                r,
-                s,
-                v
-            )
-        );
-        require(status);
-        return abi.decode(returnedData, (bool));
+        uint8 v) public returns (bool){
+           return _ImplementDelegationCore(holder,value,r,s,v, "deposit(address,uint256,bytes32,bytes32,uint8");
     }
 
-    function withdraw(
-        address holder,
+function withdraw(address holder,
         uint256 value,
         bytes32 r,
         bytes32 s,
-        uint8 v
-    ) public returns (bool) {
-        (bool status, bytes memory returnedData) = ImplementationAddress
-            .delegatecall(
-            abi.encodeWithSelector(
-                bytes4(
-                    keccak256(
-                        "_withdraw(address,uint256,bytes32,bytes32,uint8)"
-                    )
-                ),
-                holder,
-                value,
-                r,
-                s,
-                v
-            )
-        );
-        require(status);
-        return abi.decode(returnedData, (bool));
+        uint8 v) public returns (bool){
+        return _ImplementDelegationCore(holder,value,r,s,v, "withdraw(address,uint256,bytes32,bytes32,uint8");
     }
 
-    function transact(
+
+function transact(
         address holder,
         address to,
         uint256 value,
         bytes32 r,
         bytes32 s,
         uint8 v
-    ) public returns (bool) {
-        (bool status, bytes memory returnedData) = ImplementationAddress
-            .delegatecall(
-            abi.encodeWithSelector(
-                bytes4(
-                    keccak256(
-                        "_transact(address,address,uint256,bytes32,bytes32,uint8)"
-                    )
-                ),
-                holder,
-                to,
-                value,
-                r,
-                s,
-                v
-            )
-        );
+        ) public returns (bool){
+        (bool status, bytes memory returnedData) = ImplementationAddress.delegatecall(abi.encodeWithSelector(bytes4(keccak256("transact(address,address,uint256,bytes32,bytes32,uint8)")),holder,to, value, r, s, v));
         require(status);
-        return abi.decode(returnedData, (bool));
+        return abi.decode(returnedData,(bool));
     }
 
-    function checkProfits() public returns (uint256) {
-        (bool status, bytes memory returnedData) = ImplementationAddress
-            .delegatecall(
-            abi.encodeWithSelector(bytes4(keccak256("_checkProfits()")))
-        );
+function checkProfits() public view adminOnly returns (uint256){
+        (bool status, bytes memory returnedData) = ImplementationAddress.staticcall(abi.encodeWithSelector(bytes4(keccak256("_checkProfits()"))));
         require(status);
-        return abi.decode(returnedData, (uint256));
+        return abi.decode(returnedData,(uint256));
     }
 
-    function spitProfits() public returns (bool) {
-        (bool status, bytes memory returnedData) = ImplementationAddress
-            .delegatecall(
-            abi.encodeWithSelector(bytes4(keccak256("_spitProfits()")))
-        );
+function spitProfits() public adminOnly returns (bool){
+        (bool status, bytes memory returnedData) = ImplementationAddress.delegatecall(abi.encodeWithSelector(bytes4(keccak256("_spitProfits()"))));
         require(status);
-        return abi.decode(returnedData, (bool));
+        return abi.decode(returnedData,(bool));
     }
+    
+
+  /**
+     * @notice Delegates execution to an implementation contract
+     * @dev It returns to the external caller whatever the implementation returns or forwards reverts
+     */
+        fallback() external  {
+   
+        // delegate all other functions to current implementation
+        (bool status, ) = ImplementationAddress.delegatecall(msg.data);
+        require(status);
+        
+        }
 
 }
+    
+
+

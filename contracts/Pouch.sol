@@ -4,21 +4,18 @@ pragma experimental ABIEncoderV2;
 import "./TokenInterface.sol";
 import "./cTokenInterface.sol";
 import "./PTokenInterface.sol";
-import "./proxyInterface.sol";
 import "./SafeMath.sol";
 
-contract Pouch is proxyInterface {
+contract Pouch is PTokenInterface {
     uint256 public totalSupply;
     mapping(address => uint256) public balances;
     mapping(address => mapping(address => uint256)) public allowed;
-    address public ImplementationAddress;
-    address public admin;
     bytes32 public DOMAIN_SEPARATOR;
-    bytes32 public constant PERMIT_TYPEHASH = keccak256(
-        "Permit(address holder,address spender,uint256 nonce,uint256 expiry,bool isAllowed)"
-    );
-    mapping(address => uint256) public nonces;
-    uint256 private constant MAX_UINT256 = uint256(-1);
+    address public admin;
+    address cDaiAddress = 0xe7bc397DBd069fC7d0109C0636d06888bb50668c;
+    cTokenInterface cDai = cTokenInterface(cDaiAddress);
+    address daiAddress = 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa;
+    TokenInterface daiToken = TokenInterface(daiAddress);
 
     bytes32 public constant DEPOSIT_TYPEHASH = keccak256(
         "Deposit(address holder,uint256 value)"
@@ -26,15 +23,11 @@ contract Pouch is proxyInterface {
     bytes32 public constant WITHDRAW_TYPEHASH = keccak256(
         "Withdraw(address holder,uint256 value)"
     );
+    bytes32 public constant TRANSACT_TYPEHASH = keccak256(
+        "transact(address holder,address to,uint256 value)"
+    );
 
     // // // Required Interfaces
-    address daiAddress = 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa;
-    address cDaiAddress = 0xe7bc397DBd069fC7d0109C0636d06888bb50668c;
-    address pDaiAddress = 0xb5cea18Db04008a4D68444A298DBDD2D0E442E3D;
-
-    TokenInterface daiToken = TokenInterface(daiAddress);
-    cTokenInterface cDai = cTokenInterface(cDaiAddress);
-    PTokenInterface pDaiToken = PTokenInterface(pDaiAddress);
 
     constructor(address tokenAddress) public {
         DOMAIN_SEPARATOR = keccak256(
@@ -50,6 +43,8 @@ contract Pouch is proxyInterface {
         );
         admin = tokenAddress;
     }
+
+    using SafeMath for uint256;
 
     // ** Internal Functions **
 
@@ -74,30 +69,64 @@ contract Pouch is proxyInterface {
         return true;
     }
 
-    using SafeMath for uint256;
+    function getExchangeRate() public view returns (uint256) {
+        return cDai.exchangeRateStored();
+    }
+
+    function getMySupply() public view returns (uint256) {
+        TokenInterface pouch = TokenInterface(admin);
+        return pouch.supplyOf();
+    }
+    function _randomReward() internal view returns (uint256) {
+        uint256 randomnumber = uint256(
+            keccak256(abi.encodePacked(now, msg.sender, block.number))
+        ) %
+            3;
+        return randomnumber.mul(1e18);
+    }
+
+    function checkContractBalance() public view returns (uint256) {
+        return cDai.balanceOf(admin);
+    }
+
+    function checkSignature(
+        address holder,
+        uint256 value,
+        bytes32 r,
+        bytes32 s,
+        uint8 v,
+        bytes32 TYPEHASH
+    ) internal view returns (bool) {
+        bytes32 digest = keccak256(
+            abi.encodePacked(
+                "\x19\x01",
+                DOMAIN_SEPARATOR,
+                keccak256(abi.encode(TYPEHASH, holder, value))
+            )
+        );
+
+        require(holder != address(0), "Pouch/invalid-address-0");
+        require(holder == ecrecover(digest, v, r, s), "Pouch/invalid-permit");
+        require(value <= balances[holder], "Insufficient Funds");
+
+        return true;
+    }
+
+    // ** Implementation of Delegate Calls **
 
     // ** Deposit DAI **
-    function _deposit(
+    function deposit(
         address holder,
         uint256 value,
         bytes32 r,
         bytes32 s,
         uint8 v
     ) public returns (bool) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                DOMAIN_SEPARATOR,
-                keccak256(abi.encode(DEPOSIT_TYPEHASH, holder, value))
-            )
-        );
-
-        require(holder != address(0), "Pouch/invalid-address-0");
-        require(holder == ecrecover(digest, v, r, s), "Pouch/invalid-permit");
+        require(checkSignature(holder, value, r, s, v, DEPOSIT_TYPEHASH));
 
         // ** Check for sufficient Funds **
-        uint256 userBalance = daiToken.balanceOf(msg.sender);
-        require(userBalance >= value, "Insufficient Funds");
+
+        require(daiToken.balanceOf(msg.sender) >= value, "Insufficient Funds");
 
         daiToken.transferFrom(msg.sender, address(this), value); // **Transfer User's DAI**
         _mint(msg.sender, value); // **Mint PCH tokens for the User**
@@ -107,24 +136,14 @@ contract Pouch is proxyInterface {
     }
 
     // ** Withdraw DAI**
-    function _withdraw(
+    function withdraw(
         address holder,
         uint256 value,
         bytes32 r,
         bytes32 s,
         uint8 v
     ) public returns (bool) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                DOMAIN_SEPARATOR,
-                keccak256(abi.encode(WITHDRAW_TYPEHASH, holder, value))
-            )
-        );
-
-        require(holder != address(0), "Pouch/invalid-address-0");
-        require(holder == ecrecover(digest, v, r, s), "Pouch/invalid-permit");
-        require(value <= balances[holder], "Insufficient Funds");
+        require(checkSignature(holder, value, r, s, v, WITHDRAW_TYPEHASH));
 
         //          ** Burn Pouch Token **
         _transfer(address(0), value);
@@ -136,16 +155,7 @@ contract Pouch is proxyInterface {
         return true;
     }
 
-    //     function getExchangeRate() view public returns (uint) {
-    //         return cDai.exchangeRateCurrent();
-    //     }
-
-    //   function _randomReward() internal view returns (uint) {
-    //         uint randomnumber = uint(keccak256(abi.encodePacked(now, msg.sender,block.number))) % 5;
-    //         return randomnumber.mul(1e10);
-    //     }
-
-    function _transact(
+    function transact(
         address holder,
         address to,
         uint256 value,
@@ -153,59 +163,42 @@ contract Pouch is proxyInterface {
         bytes32 s,
         uint8 v
     ) public returns (bool) {
-        bytes32 digest = keccak256(
-            abi.encodePacked(
-                "\x19\x01",
-                DOMAIN_SEPARATOR,
-                keccak256(abi.encode(WITHDRAW_TYPEHASH, holder, value))
-            )
-        );
-
-        require(holder != address(0), "Pouch/invalid-address-0");
-        require(holder == ecrecover(digest, v, r, s), "Pouch/invalid-permit");
-        require(value <= balances[holder], "Insufficient Funds");
         require(to != address(0));
+        require(checkSignature(holder, value, r, s, v, TRANSACT_TYPEHASH));
 
         // ** Transfer Funds **
         _transfer(to, value);
 
         // ** Transfer Rewards,if Any. **
-        // if (value >= 1e18){
-        //     uint profitInDai =  _checkProfits().mul(getExchangeRate());
-        //     uint checkProfitInDai = profitInDai.div(1e18);
-        //     if(checkProfitInDai >= 1e11){
-        //         uint myReward =  _randomReward();
-        //         cDai.redeemUnderlying(myReward);
-        //         daiToken.transfer(msg.sender, myReward);
-
-        //     return true;
-        //     }
-        // }
+        if (value >= 1e19) {
+            uint256 checkProfitInDai = _checkProfits().mul(getExchangeRate());
+            uint256 profitInDai = checkProfitInDai.div(1e18);
+            if (profitInDai >= 1e18) {
+                uint256 myReward = _randomReward();
+                cDai.redeemUnderlying(myReward);
+                daiToken.transfer(msg.sender, myReward);
+                return true;
+            }
+        }
         return true;
     }
 
-    // function _spitProfits() public returns (bool){
+    function _spitProfits() public returns (bool) {
+        uint256 profit = _checkProfits();
+        cDai.transfer(msg.sender, profit);
+        return true;
+    }
 
-    //     uint256 adjustedTotalSupply = totalSupply.mul(1e8);
-    //     uint256 ourContractBalance = cDai.balanceOf(admin);
-    //     uint256 cDaiExchangeRate = cDai.exchangeRateCurrent();
-    //     uint256 cDaiExchangeRateDivided = cDaiExchangeRate.div(1e10);
+    function _checkProfits() public view returns (uint256) {
+        uint256 contractSupply = getMySupply();
+        uint256 adjustedTotalSupply = contractSupply.mul(1e8);
+        uint256 ourContractBalance = cDai.balanceOf(admin);
+        uint256 cDaiExchangeRate = cDai.exchangeRateStored();
+        uint256 cDaiExchangeRateDivided = cDaiExchangeRate.div(1e10);
 
-    //     uint256 currentPrice = adjustedTotalSupply.div(cDaiExchangeRateDivided);
-    //     uint256 profit = ourContractBalance.sub(currentPrice);
-    //     cDai.transfer(msg.sender, profit);
-    //     return true;
-    // }
-
-    // function _checkProfits() public returns (uint256) {
-    //     uint256 adjustedTotalSupply = totalSupply.mul(1e8);
-    //     uint256 ourContractBalance = cDai.balanceOf(admin);
-    //     uint256 cDaiExchangeRate = cDai.exchangeRateCurrent();
-    //     uint256 cDaiExchangeRateDivided = cDaiExchangeRate.div(1e10);
-
-    //     uint256 currentPrice = adjustedTotalSupply.div(cDaiExchangeRateDivided);
-    //     uint256 profit = ourContractBalance.sub(currentPrice);
-    //     return 5;
-    // }
+        uint256 currentPrice = adjustedTotalSupply.div(cDaiExchangeRateDivided);
+        uint256 profit = ourContractBalance.sub(currentPrice);
+        return profit;
+    }
 
 }
