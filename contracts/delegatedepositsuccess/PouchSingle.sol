@@ -1,9 +1,9 @@
 pragma solidity >=0.5.0;
 pragma experimental ABIEncoderV2;
 
-import "./TokenInterface.sol";
-import "./cTokenInterface.sol";
-import "./PTokenInterface.sol";
+import "../TokenInterface.sol";
+import "../cTokenInterface.sol";
+import "../PTokenInterface.sol";
 
 contract PouchToken is PTokenInterface {
     uint256 public totalSupply;
@@ -28,7 +28,7 @@ contract PouchToken is PTokenInterface {
     bytes32 public constant TRANSACT_TYPEHASH = keccak256(
         "Transact(address holder,address to,uint256 value)"
     );
-    
+
     // bytes32 public DOMAIN_SEPARATOR;
     // address public admin;
     // address cDaiAddress = 0xe7bc397DBd069fC7d0109C0636d06888bb50668c;
@@ -110,8 +110,6 @@ contract PouchToken is PTokenInterface {
 //  ** Inheritance of Pouch Token to Make Delegate Calls to implementation Contract. **
 
 contract PouchDelegate is PouchToken {
-    
-
     constructor(uint256 _chainId) public {
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
@@ -190,28 +188,30 @@ contract PouchDelegate is PouchToken {
         return true;
     }
 
-
-
-    function deposit(address holder,
-            uint256 value,
-            bytes32 r,
-            bytes32 s,
-            uint8 v) public returns (bool){
+    function deposit(
+        address holder,
+        uint256 value,
+        bytes32 r,
+        bytes32 s,
+        uint8 v
+    ) public returns (bool) {
         (bool status, bytes memory returnedData) = ImplementationAddress
             .delegatecall(
             abi.encodeWithSelector(
-                bytes4(keccak256("deposit(address,uint256,bytes32,bytes32,uint8)")),
+                bytes4(
+                    keccak256("deposit(address,uint256,bytes32,bytes32,uint8)")
+                ),
                 holder,
                 value,
                 r,
                 s,
                 v
-            ));
-            require(status);
-            return abi.decode(returnedData,(bool));
-            }
+            )
+        );
+        require(status);
+        return abi.decode(returnedData, (bool));
+    }
 
-    
     // function deposit(
     // // address holder,
     //         uint256 value
@@ -324,11 +324,11 @@ contract PouchDelegate is PouchToken {
      * @notice Delegates execution to an implementation contract
      * @dev It returns to the external caller whatever the implementation returns or forwards reverts
      */
-    fallback() external {
-        // delegate all other functions to current implementation
-        (bool status, ) = ImplementationAddress.delegatecall(msg.data);
-        require(status);
+    // fallback() external {
+    //     // delegate all other functions to current implementation
+    //     (bool status, ) = ImplementationAddress.delegatecall(msg.data);
+    //     require(status);
 
-    }
+    // }
 
 }

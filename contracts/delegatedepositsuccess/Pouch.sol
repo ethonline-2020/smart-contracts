@@ -1,10 +1,10 @@
 pragma solidity >=0.5.0;
 pragma experimental ABIEncoderV2;
 
-import "./TokenInterface.sol";
-import "./cTokenInterface.sol";
-import "./PTokenInterface.sol";
-import "./SafeMath.sol";
+import "../TokenInterface.sol";
+import "../cTokenInterface.sol";
+import "../PTokenInterface.sol";
+import "../SafeMath.sol";
 
 contract Pouch is PTokenInterface {
     uint256 public totalSupply;
@@ -94,7 +94,7 @@ contract Pouch is PTokenInterface {
         internal
         returns (bool success)
     {
-        require(balances[_from] >= _value);
+        require(balances[_from] >= _value, "Insufficient Balance");
         balances[_from] -= _value;
         balances[_to] += _value;
         emit Transfer(_from, _to, _value);

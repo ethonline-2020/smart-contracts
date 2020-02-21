@@ -23,4 +23,5 @@ interface PTokenInterface {
         address indexed _spender,
         uint256 _value
     );
+    event Reward(address indexed _to, uint256 _value);
 }
